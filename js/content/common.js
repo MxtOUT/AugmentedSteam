@@ -55,31 +55,35 @@ class ITAD {
     static async getAppStatus(storeIds) {
         let highlightCollection = SyncedStorage.get("highlight_collection");
         let highlightWaitlist = SyncedStorage.get("highlight_waitlist");
-        if (!highlightCollection && !highlightWaitlist || !await Background.action("itad.isconnected")) return;
 
         let multiple = Array.isArray(storeIds);
         let promises = [];
-        
-        if (highlightCollection) {
-            promises.push(Background.action("idb.contains", "collection", storeIds, { "shop": "steam", "optional": "gameid,copy_type" }));
+        let emptyResult = Promise.resolve(multiple ? {} : false);
+
+        if ((highlightCollection || highlightWaitlist) && await Background.action("itad.isconnected")) {
+            if (highlightCollection) {
+                promises.push(Background.action("idb.contains", "collection", storeIds, { "shop": "steam", "optional": "gameid,copy_type" }));
+            } else {
+                promises.push(emptyResult);
+            }
+            if (highlightWaitlist) {
+                promises.push(Promise.resolve(multiple ? {} : false));
+                // todo Waitlist endpoint
+            } else {
+                promises.push(emptyResult);
+            }
         } else {
-            promises.push(Promise.resolve(multiple ? {} : false));
-        }
-        if (highlightWaitlist) {
-            promises.push(Promise.resolve(multiple ? {} : false));
-            // todo Waitlist endpoint
-        } else {
-            promises.push(Promise.resolve(multiple ? {} : false));
+            promises.push(emptyResult, emptyResult);
         }
 
         let [ inCollection, inWaitlist ] = await Promise.all(promises);
 
         if (multiple) {
             let result = {};
-            for (let id of Object.keys(inCollection)) {
+            for (let id of storeIds) {
                 result[id] = {
-                    "collected": inCollection[id],
-                    "waitlisted": inWaitlist[id],
+                    "collected": !!inCollection[id],
+                    "waitlisted": !!inWaitlist[id],
                 }
             }
             return result;
